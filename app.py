@@ -241,6 +241,7 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
     media = retornos.mean().values * 252
     cov = retornos.cov().values * 252
     omega = np.diag(np.diag(P @ (tau * cov) @ P.T))
+    omega += np.eye(omega.shape[0]) * 1e-8
 
     # Calcular media ajustada por Black-Litterman
     M = np.linalg.inv(
@@ -257,7 +258,7 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
     n = len(ajustada_media)
     w_inicial = np.ones(n) / n
     restricciones = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
-    limites = [(-1, 1) for _ in range(n)]
+    limites = [(0, 1) for _ in range(n)]
 
     def sharpe_bl(w):
         ret = np.dot(w, ajustada_media)
@@ -265,6 +266,11 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
         return -(ret / vol) if vol != 0 else 0
 
     resultado = minimize(sharpe_bl, w_inicial, constraints=restricciones, bounds=limites)
+
+    if not resultado.success:
+        raise ValueError(resultado.message)
+
+    return np.array(resultado.x).flatten()    
     return np.array(resultado.x).flatten()
 
 
@@ -446,13 +452,13 @@ with tabs[2]:
         data = datos_entrenamiento[ticker].dropna()
         precios = data["Close"]
         retornos = data["Retornos"]
-
-        media = retornos.mean() * 100
-        volatilidad = retornos.std() * 100
+        media = retornos.mean() * 252 * 100
+        volatilidad = retornos.std() * np.sqrt(252) * 100
+        sharpe = media / volatilidad if volatilidad != 0 else np.nan
         sesgo = skew(retornos)
         curtosis_val = kurtosis(retornos)
-        sharpe = media / volatilidad if volatilidad != 0 else np.nan
-        downside_std = retornos[retornos < 0].std() * 100
+
+        downside_std = retornos[retornos < 0].std() * np.sqrt(252) * 100
         sortino = media / downside_std if downside_std != 0 else np.nan
         VaR_95 = np.percentile(retornos, 5) *100
         CVaR_95 = retornos[retornos <= VaR_95].mean()*100
@@ -680,29 +686,27 @@ with tabs[4]:
         sharpe_p = media_p / vol_p
         sesgo_p = skew(ret_port)
         curtosis_p = kurtosis(ret_port)
-        sortino_p = (
-            media_p / ret_port[ret_port < 0].std()
-            if ret_port[ret_port < 0].std() != 0
-            else np.nan
-        )
+        downside_std = ret_port[ret_port < 0].std() * np.sqrt(252) * 100
+        sortino_p = media_p / downside_std if downside_std != 0 else np.nan
         VaR_p = np.percentile(ret_port, 5)
         CVaR_p = ret_port[ret_port <= VaR_p].mean()
         metricas = [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]
         metricas_final = np.column_stack((metricas_final, metricas))
 
     sp_ret_flat = sp_retornos.values.flatten()
-    sp_media = sp_ret_flat.mean() * 100
-    sp_vol = sp_ret_flat.std() * 100
+
     sp_sesgo = skew(sp_ret_flat)
     sp_curtosis = kurtosis(sp_ret_flat)
+
+    sp_media = sp_ret_flat.mean() * 252 * 100
+    sp_vol = sp_ret_flat.std() * np.sqrt(252) * 100
     sp_sharpe = sp_media / sp_vol if sp_vol != 0 else np.nan
-    sp_sortino = (
-        sp_media / sp_ret_flat[sp_ret_flat < 0].std()
-        if sp_ret_flat[sp_ret_flat < 0].std() != 0
-        else np.nan
-    )
-    sp_var95 = np.percentile(sp_ret_flat, 5)
-    sp_cvar95 = sp_ret_flat[sp_ret_flat <= sp_var95].mean()
+
+    sp_downside = sp_ret_flat[sp_ret_flat < 0].std() * np.sqrt(252) * 100
+    sp_sortino = sp_media / sp_downside if sp_downside != 0 else np.nan
+    sp_var95_decimal = np.percentile(sp_ret_flat, 5)
+    sp_var95 = sp_var95_decimal * 100
+    sp_cvar95 = sp_ret_flat[sp_ret_flat <= sp_var95_decimal].mean() * 100
     sp_metricas = [sp_media, sp_vol, sp_sesgo, sp_curtosis, sp_sharpe, sp_sortino, sp_var95, sp_cvar95]
 
     metricas_final = metricas_final[:, 1:]
@@ -809,14 +813,11 @@ with tabs[5]:
         sharpe_p = media_p / vol_p
         sesgo_p = skew(serie)
         curtosis_p = kurtosis(serie)
-  
-        sortino_p = (
-            media_p / serie[serie < 0].std()
-            if serie[serie < 0].std() != 0
-            else np.nan
-        )
-        VaR_p = np.percentile(serie, 5)
-        CVaR_p = serie[serie <= VaR_p].mean()
+        downside_std = ret_port[ret_port < 0].std() * np.sqrt(252) * 100
+        sortino_p = media_p / downside_std if downside_std != 0 else np.nan
+        VaR_p_decimal = np.percentile(ret_port, 5)
+        VaR_p = VaR_p_decimal * 100
+        CVaR_p = ret_port[ret_port <= VaR_p_decimal].mean() * 100
         metricas_bl = np.column_stack((metricas_bl, [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]))
 
     metricas_bl = metricas_bl[:, 1:]
