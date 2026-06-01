@@ -227,10 +227,11 @@ def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None):
     return np.array(resultado.x).flatten()
 
 
-def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="min_vol"):
+def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
     media = retornos.mean().values
     cov = retornos.cov().values
-    omega = np.diag([tau] * P.shape[0])
+    # omega más grande = más confianza en los views del usuario
+    omega = np.diag([0.01] * P.shape[0])
 
     # Calcular media ajustada por Black-Litterman
     M = np.linalg.inv(
@@ -243,22 +244,18 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="min_vol"):
         + np.dot(np.dot(P.T, np.linalg.inv(omega)), Q),
     )
 
-    # Optimizar usando la media ajustada de Black-Litterman
+    # Optimizar maximizando Sharpe con la media ajustada
     n = len(ajustada_media)
     w_inicial = np.ones(n) / n
     restricciones = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
     limites = [(-1, 1) for _ in range(n)]
-
-    def riesgo_bl(w):
-        return np.sqrt(np.dot(w.T, np.dot(cov, w)))
 
     def sharpe_bl(w):
         ret = np.dot(w, ajustada_media)
         vol = np.sqrt(np.dot(w.T, np.dot(cov, w)))
         return -(ret / vol) if vol != 0 else 0
 
-    objetivo_funcion = sharpe_bl if metodo == "sharpe" else riesgo_bl
-    resultado = minimize(objetivo_funcion, w_inicial, constraints=restricciones, bounds=limites)
+    resultado = minimize(sharpe_bl, w_inicial, constraints=restricciones, bounds=limites)
     return np.array(resultado.x).flatten()
 
 
