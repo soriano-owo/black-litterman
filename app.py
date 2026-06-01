@@ -515,31 +515,73 @@ with tabs[2]:
         )
         st.plotly_chart(fig_dist)
 
-        st.write("### Serie de Tiempo del Precio con Drawdowns y Watermark")
-        precios_uni = precios.values.flatten()
-        drawdown_uni = drawdown.values.flatten()
-        watermark_uni = watermark.values.flatten()
+        st.write("### Precio, Watermark y Drawdown")
 
-        if len(precios_uni) != len(drawdown_uni):
-            drawdown_uni = np.resize(drawdown_uni, precios_uni.shape)
+        precios_plot = precios.astype(float)
+        watermark_plot = watermark.astype(float)
+        drawdown_pct = drawdown.astype(float) * 100
 
+        # --- Precio vs Watermark ---
+        fig_precio = go.Figure()
 
-        fig_drawdown = px.line(
-            x=data.index,
-            y=precios_uni,
-            title=f"Precio del ETF - {descripcion['nombre']}",
-            labels={"x": "Fecha", "y": "Precio del ETF"},
+        fig_precio.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=precios_plot,
+                mode="lines",
+                name="Precio",
+                line=dict(width=2),
+            )
         )
-        fig_drawdown.add_scatter(x=data.index, y=watermark_uni, mode="lines", name="Watermark", line=dict(color="blue", dash="dash"))
-        fig_dd = px.line(
-            x=data.index,
-            y=drawdown * 100,
+
+        fig_precio.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=watermark_plot,
+                mode="lines",
+                name="Watermark / Máximo histórico",
+                line=dict(width=2, dash="dash"),
+            )
+        )
+
+        fig_precio.update_layout(
+            title=f"Precio y Watermark - {descripcion['nombre']}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio del ETF",
+            legend_title="Serie",
+        )
+
+        st.plotly_chart(fig_precio, use_container_width=True)
+
+        # --- Drawdown ---
+        fig_dd = go.Figure()
+
+        fig_dd.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=drawdown_pct,
+                mode="lines",
+                name="Drawdown",
+                line=dict(width=2),
+            )
+        )
+
+        fig_dd.add_hline(
+            y=0,
+            line_dash="dash",
+            annotation_text="Máximo histórico",
+            annotation_position="bottom right",
+        )
+
+        fig_dd.update_layout(
             title=f"Drawdown (%) - {descripcion['nombre']}",
-            labels={"x": "Fecha", "y": "Drawdown (%)"}
+            xaxis_title="Fecha",
+            yaxis_title="Drawdown (%)",
+            yaxis=dict(range=[min(drawdown_pct.min() * 1.15, -5), 1]),
+            legend_title="Serie",
         )
-        st.plotly_chart(fig_drawdown)
-        st.plotly_chart(fig_dd)
 
+        st.plotly_chart(fig_dd, use_container_width=True)
 
 
 # --- Portafolios Óptimos ---
@@ -630,17 +672,17 @@ with tabs[3]:
         name="Mínima Volatilidad",
     ))
 
-    # Portafolio de Máximo Sharpe
     fig.add_trace(go.Scatter(
-        x=[vol_sharpe_p * 100], y=[ret_sharpe_p * 100],
+        x=[vol_sharpe_p * 100], 
+        y=[ret_sharpe_p * 100],
         mode="markers",
         marker=dict(color="red", size=14, symbol="star"),
         name="Máximo Sharpe Ratio",
     ))
 
-    # Portafolio Equitativo
     fig.add_trace(go.Scatter(
-        x=[vol_eq * 100], y=[ret_eq * 100],
+        x=[vol_eq * 100], 
+        y=[ret_eq * 100],
         mode="markers",
         marker=dict(color="orange", size=14, symbol="square"),
         name="Equitativo",
