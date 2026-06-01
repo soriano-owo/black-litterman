@@ -479,13 +479,33 @@ with tabs[2]:
         st.dataframe(metricas)
 
         st.write("### Rendimientos Acumulados")
-        fig_rendimientos = graficar_linea(
-            x_column=data.index,
-            y_column=((1 + retornos).cumprod() - 1) * 100,
-            title=f"Rendimiento acumulado (%) - {descripcion['nombre']}",
-            labels={"x": "Fecha", "y": "Rendimiento acumulado (%)"},
+
+        retornos_limpios = retornos.dropna()
+
+        rendimiento_acumulado_pct = ((1 + retornos_limpios).cumprod() - 1) * 100
+
+        df_rendimiento = pd.DataFrame(
+            {
+                "Fecha": rendimiento_acumulado_pct.index,
+                "Rendimiento acumulado (%)": rendimiento_acumulado_pct.values,
+            }
         )
-        st.plotly_chart(fig_rendimientos)
+
+        fig_rendimientos = px.line(
+            df_rendimiento,
+            x="Fecha",
+            y="Rendimiento acumulado (%)",
+            title=f"Rendimiento acumulado (%) - {descripcion['nombre']}",
+        )
+
+        fig_rendimientos.update_traces(line=dict(width=2))
+
+        fig_rendimientos.update_layout(
+            xaxis_title="Fecha",
+            yaxis_title="Rendimiento acumulado (%)",
+        )
+
+        st.plotly_chart(fig_rendimientos, use_container_width=True)
 
         st.write("### Distribución de Retornos")
 
@@ -517,17 +537,24 @@ with tabs[2]:
 
         st.write("### Precio, Watermark y Drawdown")
 
-        precios_plot = precios.astype(float)
-        watermark_plot = watermark.astype(float)
-        drawdown_pct = drawdown.astype(float) * 100
+        precios_plot = precios.dropna()
+        watermark_plot = watermark.loc[precios_plot.index]
+        drawdown_pct = drawdown.loc[precios_plot.index] * 100
 
-        # --- Precio vs Watermark ---
+        df_precio = pd.DataFrame(
+            {
+                "Fecha": precios_plot.index,
+                "Precio": precios_plot.values,
+                "Watermark": watermark_plot.values,
+            }
+        )
+
         fig_precio = go.Figure()
 
         fig_precio.add_trace(
             go.Scatter(
-                x=data.index,
-                y=precios_plot,
+                x=df_precio["Fecha"],
+                y=df_precio["Precio"],
                 mode="lines",
                 name="Precio",
                 line=dict(width=2),
@@ -536,10 +563,10 @@ with tabs[2]:
 
         fig_precio.add_trace(
             go.Scatter(
-                x=data.index,
-                y=watermark_plot,
+                x=df_precio["Fecha"],
+                y=df_precio["Watermark"],
                 mode="lines",
-                name="Watermark / Máximo histórico",
+                name="Watermark / máximo histórico",
                 line=dict(width=2, dash="dash"),
             )
         )
@@ -553,17 +580,19 @@ with tabs[2]:
 
         st.plotly_chart(fig_precio, use_container_width=True)
 
-        # --- Drawdown ---
-        fig_dd = go.Figure()
 
-        fig_dd.add_trace(
-            go.Scatter(
-                x=data.index,
-                y=drawdown_pct,
-                mode="lines",
-                name="Drawdown",
-                line=dict(width=2),
-            )
+        df_drawdown = pd.DataFrame(
+            {
+                "Fecha": drawdown_pct.index,
+                "Drawdown (%)": drawdown_pct.values,
+            }
+        )
+
+        fig_dd = px.line(
+            df_drawdown,
+            x="Fecha",
+            y="Drawdown (%)",
+            title=f"Drawdown (%) - {descripcion['nombre']}",
         )
 
         fig_dd.add_hline(
@@ -573,12 +602,12 @@ with tabs[2]:
             annotation_position="bottom right",
         )
 
+        fig_dd.update_traces(line=dict(width=2))
+
         fig_dd.update_layout(
-            title=f"Drawdown (%) - {descripcion['nombre']}",
             xaxis_title="Fecha",
             yaxis_title="Drawdown (%)",
-            yaxis=dict(range=[min(drawdown_pct.min() * 1.15, -5), 1]),
-            legend_title="Serie",
+            yaxis=dict(range=[min(df_drawdown["Drawdown (%)"].min() * 1.15, -5), 1]),
         )
 
         st.plotly_chart(fig_dd, use_container_width=True)
