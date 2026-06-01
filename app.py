@@ -4,13 +4,13 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, date
 from scipy.optimize import minimize
 import scipy.optimize as sco
 from scipy.stats import skew, kurtosis
 
-# --- Configuración de los ETFs ---
-tickers = {
+# --- Configuración de los ETFs disponibles ---
+tickers_info = {
     "TLT": {
         "nombre": "iShares 20+ Year Treasury Bond ETF",
         "descripcion": "Este ETF sigue el índice ICE U.S. Treasury 20+ Year Bond Index, compuesto por bonos del gobierno de EE. UU. con vencimientos superiores a 20 años.",
@@ -74,7 +74,7 @@ tickers = {
     },
     "VWO": {
         "nombre": "Vanguard FTSE Emerging Markets ETF",
-        "descripcion": "Este ETF sigue el índice FTSE Emerging Markets All Cap China A Inclusion Index, que incluye acciones de mercados emergentes en Asia, Europa, América Latina y África.",
+        "descripcion": "Este ETF sigue el índice FTSE Emerging Markets All Cap China A Inclusion Index.",
         "sector": "Renta variable",
         "categoria": "Acciones emergentes",
         "exposicion": "Mercados emergentes globales.",
@@ -110,21 +110,80 @@ tickers = {
         "duracion": "Baja",
         "estilo": "Activo refugio",
     },
+    "QQQ": {
+        "nombre": "Invesco QQQ Trust",
+        "descripcion": "Sigue el índice Nasdaq-100, compuesto por las 100 mayores empresas no financieras del Nasdaq.",
+        "indice": "Nasdaq-100 Index",
+        "sector": "Renta variable",
+        "categoria": "Tecnología EE. UU.",
+        "exposicion": "Las 100 mayores empresas no financieras del Nasdaq.",
+        "exposicion_ganada": "Alta exposición al sector tecnológico de EE. UU.",
+        "pais_inversion": ["Estados Unidos"],
+        "moneda": "USD",
+        "beta": 1.2,
+        "top_holdings": [
+            {"symbol": "Apple", "holdingPercent": "9%"},
+            {"symbol": "Microsoft", "holdingPercent": "8%"},
+            {"symbol": "Nvidia", "holdingPercent": "7%"},
+        ],
+        "gastos": "0.20%",
+        "rango_1y": "350-500 USD",
+        "rendimiento_ytd": "20%",
+        "duracion": "Baja",
+        "estilo": "Crecimiento",
+    },
+    "IEF": {
+        "nombre": "iShares 7-10 Year Treasury Bond ETF",
+        "descripcion": "Sigue bonos del Tesoro de EE. UU. con vencimientos de 7 a 10 años.",
+        "indice": "ICE U.S. Treasury 7-10 Year Bond Index",
+        "sector": "Renta fija",
+        "categoria": "Bonos del Tesoro EE. UU.",
+        "exposicion": "Bonos del gobierno de EE. UU. de mediano plazo.",
+        "exposicion_ganada": "Exposición a bonos de mediano plazo con menor duración que TLT.",
+        "pais_inversion": ["Estados Unidos"],
+        "moneda": "USD",
+        "beta": 0.1,
+        "top_holdings": [{"symbol": "US Treasury", "holdingPercent": "100%"}],
+        "gastos": "0.15%",
+        "rango_1y": "90-105 USD",
+        "rendimiento_ytd": "3%",
+        "duracion": "Media",
+        "estilo": "Grado de inversión",
+    },
+    "VNQ": {
+        "nombre": "Vanguard Real Estate ETF",
+        "descripcion": "Sigue el índice MSCI US Investable Market Real Estate 25/50, compuesto por REITs.",
+        "indice": "MSCI US Investable Market Real Estate 25/50",
+        "sector": "Bienes raíces",
+        "categoria": "REITs EE. UU.",
+        "exposicion": "Fideicomisos de inversión inmobiliaria (REITs) de EE. UU.",
+        "exposicion_ganada": "Exposición al mercado inmobiliario sin comprar propiedades directamente.",
+        "pais_inversion": ["Estados Unidos"],
+        "moneda": "USD",
+        "beta": 0.8,
+        "top_holdings": [
+            {"symbol": "Vanguard Real Estate II", "holdingPercent": "12%"},
+            {"symbol": "American Tower", "holdingPercent": "6%"},
+        ],
+        "gastos": "0.12%",
+        "rango_1y": "75-95 USD",
+        "rendimiento_ytd": "7%",
+        "duracion": "Media",
+        "estilo": "Ingreso",
+    },
 }
 
 # --- Funciones Auxiliares ---
 def cargar_datos(tickers_list, inicio, fin):
-    """Descarga datos históricos para una lista de tickers desde Yahoo Finance."""
     datos = {}
     for ticker in tickers_list:
-        df = yf.download(ticker, start=inicio, end=fin)
+        df = yf.download(ticker, start=inicio, end=fin, auto_adjust=True)
         df["Retornos"] = df["Close"].pct_change()
         datos[ticker] = df
     return datos
 
 
 def graficar_linea(x_column, y_column, title, labels=None):
-    """Crea un gráfico de línea con arrays directos."""
     if isinstance(y_column, pd.Series):
         y_column = y_column.values.flatten()
     fig = px.line(x=x_column, y=y_column, title=title, labels=labels)
@@ -132,21 +191,16 @@ def graficar_linea(x_column, y_column, title, labels=None):
 
 
 def calcular_drawdown_y_watermark(precios):
-    """Calcula el drawdown y el watermark basado en precios."""
     watermark = precios.cummax()
     drawdown = (precios / watermark) - 1
     return drawdown, watermark
 
 
-# Medida de aversión al riesgo
 risk_aversion_lambda = 1
-
-# Target de retorno anual
 target_return = 0.10
 
 
 def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None):
-    """Optimiza el portafolio según el modelo de Markowitz."""
     media = retornos.mean()
     cov = retornos.cov()
 
@@ -174,10 +228,8 @@ def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None):
 
 
 def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="min_vol"):
-    """Optimiza el portafolio utilizando el modelo de Black-Litterman."""
     media = retornos.mean()
     cov = retornos.cov()
-
     M = np.linalg.inv(
         np.linalg.inv(tau * cov)
         + np.dot(np.dot(P.T, np.linalg.inv(np.diag([1] * P.shape[0]))), P)
@@ -191,14 +243,12 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="min_vol"):
 
 
 def portfolio_performance(weights, mean_returns, cov_matrix, risk_aversion_lambda):
-    """Obtiene el performance del portafolio."""
     returns = np.sum(weights * mean_returns) * 252
     std_dev = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(252)
     return std_dev, returns
 
 
 def calcular_frontera_eficiente(retornos, num_puntos=100):
-    """Calcula la frontera eficiente generando múltiples portafolios aleatorios."""
     medias = retornos.mean()
     covarianza = retornos.cov()
     n_activos = len(medias)
@@ -218,7 +268,65 @@ def calcular_frontera_eficiente(retornos, num_puntos=100):
     return pd.DataFrame(resultados)
 
 
-# --- Configuración de Streamlit ---
+# --- Sidebar: controles del usuario ---
+st.sidebar.title("Configuración")
+
+tickers_seleccionados = st.sidebar.multiselect(
+    "Selecciona los ETFs",
+    options=list(tickers_info.keys()),
+    default=["TLT", "EMB", "SPY", "VWO", "GLD"],
+    help="Elige al menos 2 ETFs para el análisis.",
+)
+
+if len(tickers_seleccionados) < 2:
+    st.sidebar.error("Selecciona al menos 2 ETFs.")
+    st.stop()
+
+fecha_inicio = st.sidebar.date_input(
+    "Fecha de inicio del análisis",
+    value=date(2010, 1, 1),
+    min_value=date(2000, 1, 1),
+    max_value=date(2020, 1, 1),
+)
+
+fecha_fin_entrenamiento = st.sidebar.date_input(
+    "Fecha de fin del entrenamiento",
+    value=date(2020, 1, 1),
+    min_value=date(2005, 1, 1),
+    max_value=date(2022, 1, 1),
+)
+
+fecha_inicio_backtest = st.sidebar.date_input(
+    "Inicio del backtesting",
+    value=date(2021, 1, 1),
+    min_value=date(2010, 1, 1),
+    max_value=date(2023, 1, 1),
+)
+
+fecha_fin_backtest = st.sidebar.date_input(
+    "Fin del backtesting",
+    value=date(2025, 1, 1),
+    min_value=date(2011, 1, 1),
+    max_value=date.today(),
+)
+
+if fecha_fin_entrenamiento <= fecha_inicio:
+    st.sidebar.error("La fecha de fin del entrenamiento debe ser posterior al inicio.")
+    st.stop()
+
+if fecha_fin_backtest <= fecha_inicio_backtest:
+    st.sidebar.error("La fecha de fin del backtesting debe ser posterior al inicio.")
+    st.stop()
+
+tickers = {k: tickers_info[k] for k in tickers_seleccionados}
+
+inicio_str = fecha_inicio.strftime("%Y-%m-%d")
+fin_entrenamiento_str = fecha_fin_entrenamiento.strftime("%Y-%m-%d")
+inicio_backtest_str = fecha_inicio_backtest.strftime("%Y-%m-%d")
+fin_backtest_str = fecha_fin_backtest.strftime("%Y-%m-%d")
+hoy_str = datetime.today().strftime("%Y-%m-%d")
+
+# --- App principal ---
 st.title("Proyecto de Optimización de Portafolios")
 
 tabs = st.tabs(
@@ -241,14 +349,18 @@ with tabs[0]:
     tales como renta fija, renta variable, y materias primas. A lo largo del proyecto, se evaluará el rendimiento de estos
     activos a través de diversas métricas financieras y técnicas de optimización de portafolios, como la optimización de
     mínima volatilidad y la maximización del Sharpe Ratio.
+
+    Usa el panel izquierdo para seleccionar los ETFs y el rango de fechas que deseas analizar.
     """
     )
+    st.info(f"**ETFs seleccionados:** {', '.join(tickers_seleccionados)}  \n"
+            f"**Período de análisis:** {inicio_str} → {fin_entrenamiento_str}  \n"
+            f"**Período de backtesting:** {inicio_backtest_str} → {fin_backtest_str}")
 
 # --- Selección de ETF's ---
 with tabs[1]:
     st.header("Selección de ETF's")
-    hoy = datetime.today().strftime("%Y-%m-%d")
-    datos_2010_hoy = cargar_datos(list(tickers.keys()), "2010-01-01", hoy)
+    datos_historicos = cargar_datos(list(tickers.keys()), inicio_str, hoy_str)
 
     etf_caracteristicas = pd.DataFrame(
         {
@@ -260,8 +372,6 @@ with tabs[1]:
             "Moneda": [info["moneda"] for info in tickers.values()],
             "Beta": [info["beta"] for info in tickers.values()],
             "Gastos": [info["gastos"] for info in tickers.values()],
-            "Rango 1 Año": [info["rango_1y"] for info in tickers.values()],
-            "Rendimiento YTD": [info["rendimiento_ytd"] for info in tickers.values()],
             "Duración": [info["duracion"] for info in tickers.values()],
         }
     )
@@ -284,10 +394,8 @@ with tabs[1]:
         st.write(f"Duración: {info.get('duracion', 'No especificado')}")
         st.write(f"Estilo: {info.get('estilo', 'No especificado')}")
         st.write(f"Gastos: {info.get('gastos', 'No especificado')}")
-        st.write(f"Moneda de denominación: {info.get('moneda', 'No especificado')}")
+        st.write(f"Moneda: {info.get('moneda', 'No especificado')}")
         st.write(f"Beta: {info.get('beta', 'No especificado')}")
-        st.write(f"Rango en el último año: {info.get('rango_1y', 'No especificado')}")
-        st.write(f"Rendimiento YTD: {info.get('rendimiento_ytd', 'No especificado')}")
 
     st.subheader("Características de los ETFs Seleccionados")
     st.dataframe(etf_caracteristicas)
@@ -295,21 +403,21 @@ with tabs[1]:
     st.subheader("Series de Tiempo de los Precios de Cierre")
     for ticker, info in tickers.items():
         fig = px.line(
-            x=datos_2010_hoy[ticker].index,
-            y=datos_2010_hoy[ticker]["Close"].values.flatten(),
+            x=datos_historicos[ticker].index,
+            y=datos_historicos[ticker]["Close"].values.flatten(),
             title=f"Precio de Cierre - {ticker}",
         )
         st.plotly_chart(fig)
 
 # --- Estadísticas de los ETF's ---
 with tabs[2]:
-    st.header("Estadísticas de los ETF's (2010-2023)")
-    datos_2010_2023 = cargar_datos(list(tickers.keys()), "2010-01-01", "2023-01-01")
+    st.header(f"Estadísticas de los ETF's ({inicio_str} - {fin_entrenamiento_str})")
+    datos_entrenamiento = cargar_datos(list(tickers.keys()), inicio_str, fin_entrenamiento_str)
 
     for ticker, descripcion in tickers.items():
         st.subheader(f"{descripcion['nombre']} ({ticker})")
 
-        data = datos_2010_2023[ticker].dropna()
+        data = datos_entrenamiento[ticker].dropna()
         precios = data["Close"]
         retornos = data["Retornos"]
 
@@ -382,9 +490,9 @@ with tabs[2]:
 
 # --- Portafolios Óptimos ---
 with tabs[3]:
-    st.header("Portafolios Óptimos (2010-2020)")
+    st.header(f"Portafolios Óptimos ({inicio_str} - {fin_entrenamiento_str})")
 
-    datos_2010_2020 = cargar_datos(list(tickers.keys()), "2010-01-01", "2020-01-01")
+    datos_2010_2020 = cargar_datos(list(tickers.keys()), inicio_str, fin_entrenamiento_str)
     retornos_2010_2020 = pd.DataFrame(
         {k: v["Retornos"] for k, v in datos_2010_2020.items()}
     ).dropna()
@@ -451,35 +559,38 @@ with tabs[3]:
 
 # --- Backtesting ---
 with tabs[4]:
-    st.header("Backtesting (2021-2025)")
+    st.header(f"Backtesting ({inicio_backtest_str} - {fin_backtest_str})")
     st.write(
-        """
-    En esta sección se pusieron a prueba las optimizaciones obtenidas. Para ello se empleó la técnica de backtesting,
-    en la cual las estrategias fueron implementadas para el periodo de 2021 a 2025. Los resultados se encuentran condensados
+        f"""
+    En esta sección se pusieron a prueba las optimizaciones obtenidas para el periodo
+    {inicio_backtest_str} a {fin_backtest_str}. Los resultados se encuentran condensados
     en las siguientes gráficas y tablas.
     """
     )
 
-    datos_2021_2025 = cargar_datos(list(tickers.keys()), "2021-01-01", "2025-01-01")
-    retornos_2021_2025 = pd.DataFrame(
-        {k: v["Retornos"] for k, v in datos_2021_2025.items()}
+    datos_backtest = cargar_datos(list(tickers.keys()), inicio_backtest_str, fin_backtest_str)
+    retornos_backtest = pd.DataFrame(
+        {k: v["Retornos"] for k, v in datos_backtest.items()}
     ).dropna()
 
-    rendimientos_acumulados = pd.DataFrame(index=retornos_2021_2025.index)
+    rendimientos_acumulados = pd.DataFrame(index=retornos_backtest.index)
 
-    sp500_data = yf.download("^GSPC", start="2021-01-01", end="2025-01-01")["Close"]
+    sp500_data = yf.download("^GSPC", start=inicio_backtest_str, end=fin_backtest_str, auto_adjust=True)["Close"]
     sp_retornos = sp500_data.pct_change().dropna()
+
+    n_activos = len(tickers_seleccionados)
+    peso_equitativo = [1 / n_activos] * n_activos
 
     portafolios = [
         ("Mínima Volatilidad", pesos_min_vol),
         ("Máximo Sharpe Ratio", pesos_sharpe),
-        ("Equitativo", [0.2, 0.2, 0.2, 0.2, 0.2]),
+        ("Equitativo", peso_equitativo),
     ]
 
     metricas_final = [0, 0, 0, 0, 0, 0, 0, 0]
 
     for nombre, pesos in portafolios:
-        ret_port = np.sum(retornos_2021_2025 * pesos, axis=1)
+        ret_port = np.sum(retornos_backtest * pesos, axis=1)
         media_p = ret_port.mean() * 100
         vol_p = ret_port.std() * 100
         sesgo_p = skew(ret_port)
@@ -495,7 +606,6 @@ with tabs[4]:
         metricas = [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]
         metricas_final = np.column_stack((metricas_final, metricas))
 
-    # Métricas S&P 500
     sp_ret_flat = sp_retornos.values.flatten()
     sp_media = sp_ret_flat.mean() * 100
     sp_vol = sp_ret_flat.std() * 100
@@ -517,7 +627,7 @@ with tabs[4]:
     st.write(
         pd.DataFrame(
             metricas_final,
-            columns=["Mínima volatilidad", "Máximo sharp ratio", "Equitativo", "S&P 500"],
+            columns=["Mínima volatilidad", "Máximo Sharpe Ratio", "Equitativo", "S&P 500"],
             index=["Media (%)", "Volatilidad (%)", "Sesgo", "Curtosis", "Sharpe Ratio", "Sortino Ratio", "VaR 95%", "CVaR 95%"],
         )
     )
@@ -525,13 +635,8 @@ with tabs[4]:
     st.subheader("Rendimientos Acumulados de los Portafolios")
     for nombre, pesos in portafolios:
         pesos_reshaped = np.array(pesos).reshape(-1, 1)
-        rendimientos = retornos_2021_2025.dot(pesos_reshaped)
+        rendimientos = retornos_backtest.dot(pesos_reshaped)
         rendimientos_acumulados[nombre] = rendimientos.cumsum()
-        st.write(f"Rendimientos Acumulados - {nombre}")
-        st.line_chart(rendimientos.cumsum())
-
-    st.write("Rendimientos Acumulados S&P 500")
-    st.line_chart(sp_retornos.cumsum())
 
     sp_retornos_cumsum = sp_retornos.cumsum()
 
@@ -554,42 +659,40 @@ with tabs[4]:
 # --- Modelo de Black-Litterman ---
 with tabs[5]:
     st.header("Modelo de Optimización Black-Litterman")
-    P = np.array(
-        [
-            [1, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0],
-            [0, 0, 1, 0, 0],
-            [0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 1],
-        ]
-    )
-    Q = np.array([0.03, 0.06, 0.08, 0.11, 0.04])
+
+    n_activos = len(tickers_seleccionados)
+    P = np.eye(n_activos)
+
+    st.write("### Define tus views de rendimiento esperado (anual) para cada ETF:")
+    Q_values = []
+    for ticker in tickers_seleccionados:
+        val = st.slider(
+            f"Rendimiento esperado - {ticker}",
+            min_value=-10,
+            max_value=30,
+            value=5,
+            step=1,
+            format="%d%%",
+        )
+        Q_values.append(val / 100)
+    Q = np.array(Q_values)
+
     pesos_black_litterman = black_litterman_optimizar(retornos_2010_2020, P, Q)
-    st.write("Pesos del Portafolio Ajustado con el Modelo de Black-Litterman:")
+    st.write("### Pesos del Portafolio Ajustado con Black-Litterman:")
     for ticker, peso in zip(tickers.keys(), pesos_black_litterman):
         st.write(f"{ticker}: {peso:.2%}")
     fig_black_litterman = px.bar(
         x=list(tickers.keys()),
         y=pesos_black_litterman,
         title="Pesos Ajustados - Black-Litterman",
+        labels={"x": "ETF", "y": "Peso"},
     )
     st.plotly_chart(fig_black_litterman)
 
     st.write(
         """
-    Los pesos ajustados según el Modelo de Black-Litterman reflejan un portafolio optimizado que combina tus views
-    con la distribución a priori de los activos. A continuación, se presenta un análisis detallado de los resultados
-    y su interpretación.
-
-    **TLT (21.03%)**: El modelo asigna un peso significativo a los bonos de largo plazo, destacando su estabilidad
-    en escenarios de aversión al riesgo.
-
-    **EMB (52.25%)**: La gran exposición a bonos emergentes se alinea con tu view positiva (6%) hacia este segmento.
-
-    **SPY (36.20%)**: El peso asignado a acciones estadounidenses refleja confianza en el crecimiento económico en EE. UU.
-
-    **VWO (-18.09%)**: El peso negativo (corto) indica que el modelo percibe un alto nivel de incertidumbre en estos activos.
-
-    **GLD (8.60%)**: El modelo asigna una exposición moderada al oro, coherente con tu view de rendimiento estable (4%).
+    Los pesos ajustados según el Modelo de Black-Litterman reflejan un portafolio optimizado que combina
+    tus views con la distribución a priori de los activos. Ajusta los sliders de rendimiento esperado
+    para ver cómo cambian los pesos del portafolio.
     """
     )
