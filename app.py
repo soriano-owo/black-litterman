@@ -177,12 +177,33 @@ tickers_info = {
 def cargar_datos(tickers_list, inicio, fin):
     datos = {}
     for ticker in tickers_list:
-        df = yf.download(ticker, start=inicio, end=fin, auto_adjust=True)
-        close_series = df["Close"].squeeze()
-        df_clean = pd.DataFrame(index=df.index)
+        df = yf.download(ticker, start=inicio, end=fin, auto_adjust=True, progress=False)
+
+        if df.empty or "Close" not in df.columns:
+            datos[ticker] = pd.DataFrame(columns=["Close", "Retornos"])
+            continue
+
+        close_data = df["Close"]
+
+        # yfinance a veces regresa DataFrame incluso para un solo ticker.
+        # Convertimos siempre a Series 1D numérica para evitar gráficas vacías.
+        if isinstance(close_data, pd.DataFrame):
+            close_series = close_data.iloc[:, 0]
+        else:
+            close_series = close_data
+
+        close_series = pd.Series(
+            np.asarray(close_series).reshape(-1),
+            index=df.index,
+            name="Close",
+        )
+        close_series = pd.to_numeric(close_series, errors="coerce").dropna()
+
+        df_clean = pd.DataFrame(index=close_series.index)
         df_clean["Close"] = close_series
-        df_clean["Retornos"] = close_series.pct_change()
+        df_clean["Retornos"] = df_clean["Close"].pct_change()
         datos[ticker] = df_clean
+
     return datos
 
 
@@ -480,42 +501,36 @@ with tabs[2]:
 
         st.write("### Rendimientos Acumulados")
 
-        retornos_limpios = retornos.dropna()
-
+        retornos_limpios = pd.to_numeric(retornos, errors="coerce").dropna()
         rendimiento_acumulado_pct = ((1 + retornos_limpios).cumprod() - 1) * 100
 
-        df_rendimiento = pd.DataFrame(
-            {
-                "Fecha": rendimiento_acumulado_pct.index,
-                "Rendimiento acumulado (%)": rendimiento_acumulado_pct.values,
-            }
+        fig_rendimientos = go.Figure()
+        fig_rendimientos.add_trace(
+            go.Scatter(
+                x=rendimiento_acumulado_pct.index,
+                y=rendimiento_acumulado_pct.to_numpy(dtype=float),
+                mode="lines",
+                name="Rendimiento acumulado",
+                line=dict(width=2),
+            )
         )
-
-        fig_rendimientos = px.line(
-            df_rendimiento,
-            x="Fecha",
-            y="Rendimiento acumulado (%)",
-            title=f"Rendimiento acumulado (%) - {descripcion['nombre']}",
-        )
-
-        fig_rendimientos.update_traces(line=dict(width=2))
-
         fig_rendimientos.update_layout(
+            title=f"Rendimiento acumulado (%) - {descripcion['nombre']}",
             xaxis_title="Fecha",
             yaxis_title="Rendimiento acumulado (%)",
+            showlegend=False,
         )
-
         st.plotly_chart(fig_rendimientos, use_container_width=True)
 
         st.write("### Distribución de Retornos")
 
-        retornos_pct = retornos * 100
+        retornos_pct = pd.to_numeric(retornos, errors="coerce").dropna() * 100
 
         fig_dist = px.histogram(
-            retornos_pct,
+            x=retornos_pct.to_numpy(dtype=float),
             nbins=50,
             title="Distribución de Retornos (%)",
-            labels={"value": "Retornos diarios (%)", "index": "Frecuencia"},
+            labels={"x": "Retornos diarios (%)", "y": "Frecuencia"},
         )
 
         fig_dist.add_vline(
@@ -537,80 +552,65 @@ with tabs[2]:
 
         st.write("### Precio, Watermark y Drawdown")
 
-        precios_plot = precios.dropna()
-        watermark_plot = watermark.loc[precios_plot.index]
-        drawdown_pct = drawdown.loc[precios_plot.index] * 100
+        precios_plot = pd.to_numeric(precios, errors="coerce").dropna()
+        watermark_plot = pd.to_numeric(watermark.reindex(precios_plot.index), errors="coerce")
+        drawdown_pct = pd.to_numeric(drawdown.reindex(precios_plot.index), errors="coerce") * 100
 
-        df_precio = pd.DataFrame(
-            {
-                "Fecha": precios_plot.index,
-                "Precio": precios_plot.values,
-                "Watermark": watermark_plot.values,
-            }
-        )
-
+        # --- Precio y watermark ---
         fig_precio = go.Figure()
-
         fig_precio.add_trace(
             go.Scatter(
-                x=df_precio["Fecha"],
-                y=df_precio["Precio"],
+                x=precios_plot.index,
+                y=precios_plot.to_numpy(dtype=float),
                 mode="lines",
                 name="Precio",
                 line=dict(width=2),
             )
         )
-
         fig_precio.add_trace(
             go.Scatter(
-                x=df_precio["Fecha"],
-                y=df_precio["Watermark"],
+                x=watermark_plot.index,
+                y=watermark_plot.to_numpy(dtype=float),
                 mode="lines",
                 name="Watermark / máximo histórico",
                 line=dict(width=2, dash="dash"),
             )
         )
-
         fig_precio.update_layout(
             title=f"Precio y Watermark - {descripcion['nombre']}",
             xaxis_title="Fecha",
             yaxis_title="Precio del ETF",
             legend_title="Serie",
         )
-
         st.plotly_chart(fig_precio, use_container_width=True)
 
-
-        df_drawdown = pd.DataFrame(
-            {
-                "Fecha": drawdown_pct.index,
-                "Drawdown (%)": drawdown_pct.values,
-            }
+        # --- Drawdown ---
+        fig_dd = go.Figure()
+        fig_dd.add_trace(
+            go.Scatter(
+                x=drawdown_pct.index,
+                y=drawdown_pct.to_numpy(dtype=float),
+                mode="lines",
+                name="Drawdown",
+                line=dict(width=2),
+            )
         )
-
-        fig_dd = px.line(
-            df_drawdown,
-            x="Fecha",
-            y="Drawdown (%)",
-            title=f"Drawdown (%) - {descripcion['nombre']}",
-        )
-
         fig_dd.add_hline(
             y=0,
             line_dash="dash",
             annotation_text="Máximo histórico",
             annotation_position="bottom right",
         )
-
-        fig_dd.update_traces(line=dict(width=2))
-
+        dd_min = float(drawdown_pct.min()) if len(drawdown_pct.dropna()) else -5.0
         fig_dd.update_layout(
+            title=f"Drawdown (%) - {descripcion['nombre']}",
             xaxis_title="Fecha",
             yaxis_title="Drawdown (%)",
-            yaxis=dict(range=[min(df_drawdown["Drawdown (%)"].min() * 1.15, -5), 1]),
+            yaxis=dict(range=[min(dd_min * 1.15, -5), 1]),
+            legend_title="Serie",
         )
-
         st.plotly_chart(fig_dd, use_container_width=True)
+
 
 
 # --- Portafolios Óptimos ---
@@ -701,17 +701,17 @@ with tabs[3]:
         name="Mínima Volatilidad",
     ))
 
+    # Portafolio de Máximo Sharpe
     fig.add_trace(go.Scatter(
-        x=[vol_sharpe_p * 100], 
-        y=[ret_sharpe_p * 100],
+        x=[vol_sharpe_p * 100], y=[ret_sharpe_p * 100],
         mode="markers",
         marker=dict(color="red", size=14, symbol="star"),
         name="Máximo Sharpe Ratio",
     ))
 
+    # Portafolio Equitativo
     fig.add_trace(go.Scatter(
-        x=[vol_eq * 100], 
-        y=[ret_eq * 100],
+        x=[vol_eq * 100], y=[ret_eq * 100],
         mode="markers",
         marker=dict(color="orange", size=14, symbol="square"),
         name="Equitativo",
