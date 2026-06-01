@@ -114,8 +114,11 @@ def cargar_datos(tickers_list, inicio, fin):
     for t in tickers_list:
         df = yf.download(t, start=inicio, end=fin, auto_adjust=True)
         if not df.empty:
-            df["Retornos"] = df["Close"].pct_change()
-            datos[t] = df
+            close_series = df["Close"].squeeze()
+            df_clean = pd.DataFrame(index=df.index)
+            df_clean["Close"] = close_series
+            df_clean["Retornos"] = close_series.pct_change()
+            datos[t] = df_clean
     return datos
 
 def calcular_drawdown_y_watermark(precios):
@@ -124,14 +127,13 @@ def calcular_drawdown_y_watermark(precios):
     return drawdown, watermark
 
 def optimizar_portafolio_markowitz(retornos, metodo="min_vol"):
-    """Optimización clásica de Markowitz utilizando parámetros ANUALIZADOS."""
     media_anual = retornos.mean() * 252
     cov_anual = retornos.cov() * 252
     n = len(media_anual)
     w_inicial = np.ones(n) / n
     
     restricciones = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
-    limites = [(0, 1) for _ in range(n)]  # Long-only para consistencia institucional en ETFs
+    limites = [(0, 1) for _ in range(n)]
 
     def riesgo(w):
         return np.sqrt(np.dot(w.T, np.dot(cov_anual, w)))
@@ -146,11 +148,9 @@ def optimizar_portafolio_markowitz(retornos, metodo="min_vol"):
     return np.array(resultado.x).flatten()
 
 def black_litterman_optimizar(retornos, P, Q, tau=0.025):
-    """Modelo Black-Litterman con consistencia matemática de temporalidad anual."""
     media_anual = retornos.mean().values * 252
     cov_anual = retornos.cov().values * 252
     
-    # Matriz de incertidumbre de las views (proporcional a la covarianza de los activos de la view)
     omega = np.diag(np.diag(np.dot(np.dot(P, tau * cov_anual), P.T)))
     if np.all(omega == 0): 
         omega = np.eye(P.shape[0]) * 0.001
@@ -158,13 +158,11 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.025):
     try:
         inv_tau_cov = np.linalg.inv(tau * cov_anual)
         inv_omega = np.linalg.inv(omega)
-        
         M = np.linalg.inv(inv_tau_cov + np.dot(np.dot(P.T, inv_omega), P))
         ajustada_media = np.dot(M, np.dot(inv_tau_cov, media_anual) + np.dot(np.dot(P.T, inv_omega), Q))
     except np.linalg.LinAlgError:
-        ajustada_media = media_anual  # Fallback en caso de matriz singular
+        ajustada_media = media_anual
 
-    # Optimización convexa utilizando la media posterior ajustada
     n = len(ajustada_media)
     w_inicial = np.ones(n) / n
     restricciones = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
@@ -198,7 +196,7 @@ def calcular_frontera_eficiente(retornos, num_puntos=1000):
     return pd.DataFrame(resultados)
 
 # --- Controles de Usuario ---
-st.sidebar.title("⚙️ Parámetros Cuantitativos")
+st.sidebar.title("Parámetros Cuantitativos")
 tickers_seleccionados = st.sidebar.multiselect(
     "Selecciona los ETFs de la Cartera",
     options=list(tickers_info.keys()),
@@ -221,7 +219,7 @@ if fecha_fin_entrenamiento <= fecha_inicio or fecha_fin_backtest <= fecha_inicio
 tickers = {k: tickers_info[k] for k in tickers_seleccionados}
 
 # --- App Principal ---
-st.title("💼 Asset Allocation & Portfolio Optimization Engine")
+st.title("Asset Allocation & Portfolio Optimization Engine")
 tabs = st.tabs(["Dashboard", "Análisis de Activos", "Frontera Eficiente", "Backtesting Histórico", "Black-Litterman Engine"])
 
 # --- TAB 1: DASHBOARD ---
@@ -233,13 +231,11 @@ with tabs[0]:
 
 # --- TAB 2: ANÁLISIS DE ACTIVOS ---
 with tabs[1]:
-    st.header("📈 Análisis de Series de Tiempo Estocásticas")
+    st.header("Análisis de Series de Tiempo Estocásticas")
     datos_completos = cargar_datos(list(tickers.keys()), fecha_inicio.strftime("%Y-%m-%d"), fecha_fin_backtest.strftime("%Y-%m-%d"))
     
-    # Dataframe de características estáticas
     st.dataframe(pd.DataFrame(tickers).T[["nombre", "sector", "categoria", "gastos", "beta"]])
 
-    # Métricas Anualizadas In-Sample
     st.subheader("Métricas Estadísticas Anualizadas (Periodo de Entrenamiento)")
     for ticker in tickers.keys():
         df_act = datos_completos[ticker].loc[fecha_inicio.strftime("%Y-%m-%d"):fecha_fin_entrenamiento.strftime("%Y-%m-%d")]
@@ -254,11 +250,9 @@ with tabs[1]:
         col2.metric(f"{ticker} Volatilidad Anual", f"{vol_anual:.2f}%")
         col3.metric(f"{ticker} Sharpe Ratio", f"{sharpe_anual:.2f}")
 
-# --- TAB 3: PORTAFOLIOS ÓPTIMOS & FRONTERA EFICIENTE ---
+# --- TAB 3: PORTAFOLIOS ÓPTIMOS ---
 with tabs[2]:
-    st.header("📊 Frontera Eficiente de Markowitz")
-    
-    # Consolidar retornos de entrenamiento
+    st.header("Frontera Eficiente de Markowitz")
     df_retornos_entren = pd.DataFrame({k: datos_completos[k]["Retornos"] for k in tickers.keys()}).loc[fecha_inicio.strftime("%Y-%m-%d"):fecha_fin_entrenamiento.strftime("%Y-%m-%d")].dropna()
     
     pesos_min_vol = optimizar_portafolio_markowitz(df_retornos_entren, metodo="min_vol")
@@ -278,15 +272,15 @@ with tabs[2]:
 
 # --- TAB 4: BACKTESTING ---
 with tabs[3]:
-    st.header("🧪 Backtesting Estricto Out-of-Sample")
+    st.header("Backtesting Estricto Out-of-Sample")
     
     df_retornos_backtest = pd.DataFrame({k: datos_completos[k]["Retornos"] for k in tickers.keys()}).loc[fecha_inicio_backtest.strftime("%Y-%m-%d"):fecha_fin_backtest.strftime("%Y-%m-%d")].dropna()
     
-    # Descargar Benchmark real de mercado
     sp500 = yf.download("^GSPC", start=fecha_inicio_backtest.strftime("%Y-%m-%d"), end=fecha_fin_backtest.strftime("%Y-%m-%d"), auto_adjust=True)
-    sp500_ret = sp500["Close"].pct_change().dropna()
+    sp500_ret = sp500["Close"].squeeze().pct_change().dropna()
     
-    # Calcular curvas de equidad compuestas correctas (cumprod)
+    sp500_ret = sp500_ret.reindex(df_retornos_backtest.index).fillna(0)
+    
     eq_w = np.ones(len(tickers_seleccionados)) / len(tickers_seleccionados)
     
     ret_min_vol = df_retornos_backtest.dot(pesos_min_vol)
@@ -300,12 +294,12 @@ with tabs[3]:
         "S&P 500 Benchmark": (1 + sp500_ret).cumprod() - 1
     }, index=df_retornos_backtest.index)
     
-    fig_backtest = px.line(df_cum_perf, title="Evolución de Retornos Compuestos Acumulados", labels={"value": "Retorno Acumulado", "Date": "Fecha"})
+    fig_backtest = px.line(df_cum_perf, title="Evolución de Retornos Compuestos Acumulados (Out-of-Sample)", labels={"value": "Retorno Acumulado", "Date": "Fecha"})
     st.plotly_chart(fig_backtest)
 
-# --- TAB 5: BLACK-LITTERMAN ENGINE ---
+# --- TAB 5: BLACK-LITTERMAN ---
 with tabs[4]:
-    st.header("🧠 Black-Litterman Engine Core")
+    st.header("Black-Litterman Engine Core")
     st.markdown("Inserta tus expectativas de mercado anualizadas (*Views*) para reajustar los pesos de manera Bayesiana:")
     
     n_activos = len(tickers_seleccionados)
@@ -320,7 +314,7 @@ with tabs[4]:
     
     pesos_bl = black_litterman_optimizar(df_retornos_entren, P, Q)
     
-    st.subheader("⚖️ Pesos Finales Ajustados por Black-Litterman")
+    st.subheader("Pesos Finales Ajustados por Black-Litterman")
     fig_bl = px.bar(x=list(tickers.keys()), y=pesos_bl, labels={"x": "ETF", "y": "Peso Optimizando"}, title="Distribución de Activos Final (BL)")
     st.plotly_chart(fig_bl)
     st.write({t: f"{p:.2%}" for t, p in zip(tickers.keys(), pesos_bl)})
