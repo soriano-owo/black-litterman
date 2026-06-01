@@ -959,7 +959,7 @@ with tabs[5]:
             y=sp_bl_cumsum.values,
             mode="lines",
             name="S&P 500",
-            line=dict(color="black", dash="dot"),
+            line=dict(color="green", dash="dot"),
         )
     )
     st.plotly_chart(fig_bl, use_container_width=True)
