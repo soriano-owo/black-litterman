@@ -459,7 +459,7 @@ with tabs[1]:
             y=datos_historicos[ticker]["Close"].values.flatten(),
             title=f"Precio de Cierre - {ticker}",
         )
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, use_container_width=True)
 
 # --- Estadísticas de los ETF's ---
 with tabs[2]:
@@ -498,6 +498,67 @@ with tabs[2]:
             }
         )
         st.dataframe(metricas)
+
+        st.write("### Precio y Watermark")
+
+        precios_plot = pd.to_numeric(precios, errors="coerce").dropna()
+        watermark_plot = pd.to_numeric(watermark.reindex(precios_plot.index), errors="coerce")
+        drawdown_pct = pd.to_numeric(drawdown.reindex(precios_plot.index), errors="coerce") * 100
+
+        fig_precio = go.Figure()
+        fig_precio.add_trace(
+            go.Scatter(
+                x=precios_plot.index,
+                y=precios_plot.to_numpy(dtype=float),
+                mode="lines",
+                name="Precio",
+                line=dict(width=2),
+            )
+        )
+        fig_precio.add_trace(
+            go.Scatter(
+                x=watermark_plot.index,
+                y=watermark_plot.to_numpy(dtype=float),
+                mode="lines",
+                name="Watermark / máximo histórico",
+                line=dict(width=2, dash="dash"),
+            )
+        )
+        fig_precio.update_layout(
+            title=f"Precio y Watermark - {descripcion['nombre']}",
+            xaxis_title="Fecha",
+            yaxis_title="Precio del ETF",
+            legend_title="Serie",
+        )
+        st.plotly_chart(fig_precio, use_container_width=True)
+
+        st.write("### Drawdown")
+
+        fig_dd = go.Figure()
+        fig_dd.add_trace(
+            go.Scatter(
+                x=drawdown_pct.index,
+                y=drawdown_pct.to_numpy(dtype=float),
+                mode="lines",
+                name="Drawdown",
+                line=dict(width=2),
+            )
+        )
+        fig_dd.add_hline(
+            y=0,
+            line_dash="dash",
+            annotation_text="Máximo histórico",
+            annotation_position="bottom right",
+        )
+        dd_min = float(drawdown_pct.min()) if len(drawdown_pct.dropna()) else -5.0
+        fig_dd.update_layout(
+            title=f"Drawdown (%) - {descripcion['nombre']}",
+            xaxis_title="Fecha",
+            yaxis_title="Drawdown (%)",
+            yaxis=dict(range=[min(dd_min * 1.15, -5), 1]),
+            legend_title="Serie",
+        )
+        st.plotly_chart(fig_dd, use_container_width=True)
 
         st.write("### Rendimientos Acumulados")
 
@@ -548,69 +609,11 @@ with tabs[2]:
             annotation_text="CVaR 95%",
             annotation_position="top left"
         )
-        st.plotly_chart(fig_dist)
-
-        st.write("### Precio, Watermark y Drawdown")
-
-        precios_plot = pd.to_numeric(precios, errors="coerce").dropna()
-        watermark_plot = pd.to_numeric(watermark.reindex(precios_plot.index), errors="coerce")
-        drawdown_pct = pd.to_numeric(drawdown.reindex(precios_plot.index), errors="coerce") * 100
-
-        # --- Precio y watermark ---
-        fig_precio = go.Figure()
-        fig_precio.add_trace(
-            go.Scatter(
-                x=precios_plot.index,
-                y=precios_plot.to_numpy(dtype=float),
-                mode="lines",
-                name="Precio",
-                line=dict(width=2),
-            )
+        fig_dist.update_layout(
+            xaxis_title="Retornos diarios (%)",
+            yaxis_title="Frecuencia",
         )
-        fig_precio.add_trace(
-            go.Scatter(
-                x=watermark_plot.index,
-                y=watermark_plot.to_numpy(dtype=float),
-                mode="lines",
-                name="Watermark / máximo histórico",
-                line=dict(width=2, dash="dash"),
-            )
-        )
-        fig_precio.update_layout(
-            title=f"Precio y Watermark - {descripcion['nombre']}",
-            xaxis_title="Fecha",
-            yaxis_title="Precio del ETF",
-            legend_title="Serie",
-        )
-        st.plotly_chart(fig_precio, use_container_width=True)
-
-        # --- Drawdown ---
-        fig_dd = go.Figure()
-        fig_dd.add_trace(
-            go.Scatter(
-                x=drawdown_pct.index,
-                y=drawdown_pct.to_numpy(dtype=float),
-                mode="lines",
-                name="Drawdown",
-                line=dict(width=2),
-            )
-        )
-        fig_dd.add_hline(
-            y=0,
-            line_dash="dash",
-            annotation_text="Máximo histórico",
-            annotation_position="bottom right",
-        )
-        dd_min = float(drawdown_pct.min()) if len(drawdown_pct.dropna()) else -5.0
-        fig_dd.update_layout(
-            title=f"Drawdown (%) - {descripcion['nombre']}",
-            xaxis_title="Fecha",
-            yaxis_title="Drawdown (%)",
-            yaxis=dict(range=[min(dd_min * 1.15, -5), 1]),
-            legend_title="Serie",
-        )
-        st.plotly_chart(fig_dd, use_container_width=True)
-
+        st.plotly_chart(fig_dist, use_container_width=True)
 
 
 # --- Portafolios Óptimos ---
@@ -628,7 +631,7 @@ with tabs[3]:
     for ticker, peso in zip(tickers.keys(), pesos_min_vol):
         st.write(f"{ticker}: {peso:.2%}")
     fig_min_vol = px.bar(x=list(tickers.keys()), y=pesos_min_vol, title="Pesos - Mínima Volatilidad")
-    st.plotly_chart(fig_min_vol)
+    st.plotly_chart(fig_min_vol, use_container_width=True)
 
     st.subheader("Portafolio de Máximo Sharpe Ratio")
     pesos_sharpe = optimizar_portafolio_markowitz(retornos_2010_2020, metodo="sharpe")
@@ -636,7 +639,7 @@ with tabs[3]:
     for ticker, peso in zip(tickers.keys(), pesos_sharpe):
         st.write(f"{ticker}: {peso:.2%}")
     fig_sharpe = px.bar(x=list(tickers.keys()), y=pesos_sharpe, title="Pesos - Máximo Sharpe Ratio")
-    st.plotly_chart(fig_sharpe)
+    st.plotly_chart(fig_sharpe, use_container_width=True)
 
     # --- Frontera eficiente como curva continua ---
 
@@ -723,7 +726,7 @@ with tabs[3]:
         yaxis_title="Rendimiento esperado anualizado (%)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
     log_ret = np.log(retornos_2010_2020 + 1).dropna()
     mean_returns = log_ret.mean()
@@ -848,7 +851,7 @@ with tabs[4]:
             line=dict(color="red", dash="solid"),
         )
     )
-    st.plotly_chart(fig_rendimientos)
+    st.plotly_chart(fig_rendimientos, use_container_width=True)
 
 # --- Modelo de Black-Litterman ---
 with tabs[5]:
@@ -883,7 +886,7 @@ with tabs[5]:
         title="Pesos Ajustados - Black-Litterman",
         labels={"x": "ETF", "y": "Peso"},
     )
-    st.plotly_chart(fig_black_litterman)
+    st.plotly_chart(fig_black_litterman, use_container_width=True)
 
     st.write(
         """
@@ -959,4 +962,4 @@ with tabs[5]:
             line=dict(color="black", dash="dot"),
         )
     )
-    st.plotly_chart(fig_bl)
+    st.plotly_chart(fig_bl, use_container_width=True)
