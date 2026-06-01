@@ -72,7 +72,7 @@ tickers = {
         "rendimiento_ytd": "15%",
         "duracion": "Baja"
     },
-    "V0O": {
+    "VWO": {
         "nombre": "Vanguard FTSE Emerging Markets ETF",
         "descripcion": "Este ETF sigue el índice FTSE Emerging Markets All Cap China A Inclusion Index, que incluye acciones de mercados emergentes en Asia, Europa, América Latina y África.",
         "sector": "Renta variable",
@@ -152,7 +152,7 @@ def calcular_metricas(df, nivel_VaR=[0.95, 0.975, 0.99]):
     sharpe = np.mean(retornos) / np.std(retornos) if np.std(retornos) != 0 else np.nan
 
     # Beta
-    sp500 = yf.download("^GSPC", start=df.index[0], end=df.index[-1])['Close']
+    sp500 = yf.download("^GSPC", start=df.index[0], end=df.index[-1])['Adj Close']
     sp500_retornos = sp500.pct_change().dropna()
     retornos_alineados = retornos.reindex(sp500_retornos.index).dropna()
     sp500_retornos_alineados = sp500_retornos.reindex(retornos_alineados.index).dropna()
@@ -390,9 +390,10 @@ with tabs[1]:
     # Mostrar la serie de tiempo de cada ETF
     st.subheader("Series de Tiempo de los Precios de Cierre")
     for ticker, info in tickers.items():
-	fig = px.line(x=datos_2010_hoy[ticker].index,
-        y=datos_2010_hoy[ticker]['Close'].values.flatten(),
-        title=f"Precio de Cierre - {ticker}")
+        fig = px.line(datos_2010_hoy[ticker],
+                      x=datos_2010_hoy[ticker].index,
+                      y=datos_2010_hoy[ticker]['Close'].values.flatten(),
+                      title=f"Precio de Cierre - {ticker}")
         st.plotly_chart(fig)
         
         
@@ -603,7 +604,7 @@ with tabs[4]:
 
 
     # Datos del S&P 500
-    sp500 = yf.download("^GSPC", start="2021-01-01", end="2023-01-01")['Close']
+    sp500 = yf.download("^GSPC", start="2021-01-01", end="2023-01-01")['Adj Close']
     sp_retornos = sp500.pct_change().dropna()
 
     sp_media_retornos = retornos.mean() * 100
