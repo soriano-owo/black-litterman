@@ -451,7 +451,7 @@ with tabs[3]:
 
 # --- Backtesting ---
 with tabs[4]:
-    st.header("Backtesting (2021-2023)")
+    st.header("Backtesting (2021-2025)")
     st.write(
         """
     En esta sección se pusieron a prueba las optimizaciones obtenidas. Para ello se empleó la técnica de backtesting,
@@ -460,14 +460,15 @@ with tabs[4]:
     """
     )
 
-    datos_2021_2023 = cargar_datos(list(tickers.keys()), "2021-01-01", "2023-01-01")
-    retornos_2021_2023 = pd.DataFrame(
-        {k: v["Retornos"] for k, v in datos_2021_2023.items()}
+    datos_2021_2025 = cargar_datos(list(tickers.keys()), "2021-01-01", "2025-01-01")
+    
+retornos_2021_2025 = pd.DataFrame(
+        {k: v["Retornos"] for k, v in datos_2021_2025.items()}
     ).dropna()
 
-    rendimientos_acumulados = pd.DataFrame(index=retornos_2021_2023.index)
+    rendimientos_acumulados = pd.DataFrame(index=retornos_2021_2025.index)
 
-    sp500_data = yf.download("^GSPC", start="2021-01-01", end="2023-01-01")["Close"]
+    sp500_data = yf.download("^GSPC", start="2021-01-01", end="2025-01-01")["Close"]
     sp_retornos = sp500_data.pct_change().dropna()
 
     portafolios = [
@@ -479,7 +480,7 @@ with tabs[4]:
     metricas_final = [0, 0, 0, 0, 0, 0, 0, 0]
 
     for nombre, pesos in portafolios:
-        ret_port = np.sum(retornos_2021_2023 * pesos, axis=1)
+        ret_port = np.sum(retornos_2021_2025 * pesos, axis=1)
         media_p = ret_port.mean() * 100
         vol_p = ret_port.std() * 100
         sesgo_p = skew(ret_port)
@@ -525,7 +526,7 @@ with tabs[4]:
     st.subheader("Rendimientos Acumulados de los Portafolios")
     for nombre, pesos in portafolios:
         pesos_reshaped = np.array(pesos).reshape(-1, 1)
-        rendimientos = retornos_2021_2023.dot(pesos_reshaped)
+        rendimientos = retornos_2021_2025.dot(pesos_reshaped)
         rendimientos_acumulados[nombre] = rendimientos.cumsum()
         st.write(f"Rendimientos Acumulados - {nombre}")
         st.line_chart(rendimientos.cumsum())
