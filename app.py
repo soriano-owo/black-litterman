@@ -270,7 +270,6 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
     if not resultado.success:
         raise ValueError(resultado.message)
 
-    return np.array(resultado.x).flatten()    
     return np.array(resultado.x).flatten()
 
 
@@ -482,9 +481,9 @@ with tabs[2]:
         st.write("### Rendimientos Acumulados")
         fig_rendimientos = graficar_linea(
             x_column=data.index,
-            y_column=((1 + retornos).cumprod() - 1)*100,
-            title=f"Rendimiento acumulado - {descripcion['nombre']}",
-            labels={"x": "Fecha", "y": "Rendimiento acumulado"},
+            y_column=((1 + retornos).cumprod() - 1) * 100,
+            title=f"Rendimiento acumulado (%) - {descripcion['nombre']}",
+            labels={"x": "Fecha", "y": "Rendimiento acumulado (%)"},
         )
         st.plotly_chart(fig_rendimientos)
 
@@ -538,8 +537,8 @@ with tabs[2]:
             title=f"Drawdown (%) - {descripcion['nombre']}",
             labels={"x": "Fecha", "y": "Drawdown (%)"}
         )
-        st.plotly_chart(fig_dd)
         st.plotly_chart(fig_drawdown)
+        st.plotly_chart(fig_dd)
 
 
 
@@ -633,7 +632,7 @@ with tabs[3]:
 
     # Portafolio de Máximo Sharpe
     fig.add_trace(go.Scatter(
-        x=[vol_sharpe_p], y=[ret_sharpe_p],
+        x=[vol_sharpe_p * 100], y=[ret_sharpe_p * 100],
         mode="markers",
         marker=dict(color="red", size=14, symbol="star"),
         name="Máximo Sharpe Ratio",
@@ -641,7 +640,7 @@ with tabs[3]:
 
     # Portafolio Equitativo
     fig.add_trace(go.Scatter(
-        x=[vol_eq], y=[ret_eq],
+        x=[vol_eq * 100], y=[ret_eq * 100],
         mode="markers",
         marker=dict(color="orange", size=14, symbol="square"),
         name="Equitativo",
@@ -649,8 +648,8 @@ with tabs[3]:
 
     fig.update_layout(
         title="Frontera Eficiente",
-        xaxis_title="Volatilidad",
-        yaxis_title="Rendimiento Esperado",
+        xaxis_title="Volatilidad anualizada (%)",
+        yaxis_title="Rendimiento esperado anualizado (%)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig)
@@ -760,14 +759,14 @@ with tabs[4]:
         pesos_arr = np.array(pesos).flatten()
         ret_serie = retornos_backtest.values.dot(pesos_arr)
         # Corrección: Uso de rentabilidad compuesta geométrica real en vez de cumsum aritmético
-        rendimientos_acumulados[nombre] = (1 + ret_serie).cumprod() - 1
+        rendimientos_acumulados[nombre] = ((1 + ret_serie).cumprod() - 1) * 100
 
-    sp_retornos_cumsum = (1 + sp_retornos.squeeze()).cumprod() - 1
+    sp_retornos_cumsum = ((1 + sp_retornos.squeeze()).cumprod() - 1) * 100
 
     fig_rendimientos = px.line(
         rendimientos_acumulados,
-        title="Rendimientos Acumulados - Comparación de Portafolios",
-        labels={"value": "Rendimientos Acumulados", "index": "Fecha"},
+        title="Rendimientos acumulados (%) - Comparación de Portafolios",
+        labels={"value": "Rendimiento acumulado (%)", "index": "Fecha"},
     )
     fig_rendimientos.add_trace(
         go.Scatter(
@@ -842,7 +841,7 @@ with tabs[5]:
         ret_serie = retornos_backtest.values.dot(pesos_arr)
         serie = pd.Series(ret_serie, index=retornos_backtest.index)
         # Corrección: Interés compuesto geométrico real para portafolios BL
-        rendimientos_bl[nombre] = (1 + serie).cumprod() - 1
+        rendimientos_bl[nombre] = ((1 + serie).cumprod() - 1) * 100
 
         sesgo_p = skew(serie)
         curtosis_p = kurtosis(serie)
@@ -857,9 +856,6 @@ with tabs[5]:
         VaR_p_decimal = np.percentile(serie, 5)
         VaR_p = VaR_p_decimal * 100
         CVaR_p = serie[serie <= VaR_p_decimal].mean() * 100
-        CVaR_p_decimal = ret_port[ret_port <= VaR_p_decimal].mean()
-
-        VaR_p = VaR_p_decimal * 100
 
         metricas_bl = np.column_stack((metricas_bl, [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]))
 
@@ -876,12 +872,12 @@ with tabs[5]:
 
     st.write("### Rendimientos Acumulados")
     # Corrección: Interés compuesto geométrico real para el benchmark en pestaña BL
-    sp_bl_cumsum = (1 + sp_retornos.squeeze()).cumprod() - 1
+    sp_bl_cumsum = ((1 + sp_retornos.squeeze()).cumprod() - 1) * 100
 
     fig_bl = px.line(
         rendimientos_bl,
-        title="Rendimientos Acumulados - Black-Litterman vs otros portafolios",
-        labels={"value": "Rendimientos Acumulados", "variable": "Portafolio", "index": "Fecha"},
+        title="Rendimientos acumulados (%) - Black-Litterman vs otros portafolios",
+        labels={"value": "Rendimiento acumulado (%)", "variable": "Portafolio", "index": "Fecha"},
     )
     fig_bl.add_trace(
         go.Scatter(
