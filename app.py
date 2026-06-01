@@ -326,7 +326,7 @@ st.sidebar.title("Configuración")
 tickers_seleccionados = st.sidebar.multiselect(
     "Selecciona los ETFs",
     options=list(tickers_info.keys()),
-    default=["TLT", "EMB", "SPY", "VWO", "GLD"],
+    default=["TLT", "EMB", "SPY", "VWO"],
     help="Elige al menos 2 ETFs para el análisis.",
 )
 
@@ -379,7 +379,7 @@ fin_backtest_str = fecha_fin_backtest.strftime("%Y-%m-%d")
 hoy_str = datetime.today().strftime("%Y-%m-%d")
 
 # --- App principal ---
-st.title("Proyecto de Optimización de Portafolios")
+st.title("Dashboard de Optimización de Portafolios con Markowitz y Black-Litterman")
 
 tabs = st.tabs(
     [
