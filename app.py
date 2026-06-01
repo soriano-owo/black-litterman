@@ -203,15 +203,17 @@ risk_aversion_lambda = 1
 target_return = 0.10
 
 
-def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None):
-    media = retornos.mean()
-    cov = retornos.cov()
+def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None, rf=0.0):
+    media = retornos.mean() * 252
+    cov = retornos.cov() * 252
 
     def riesgo(w):
-        return np.sqrt(np.dot(w.T, np.dot(cov, w)))
+        return np.sqrt(w.T @ cov @ w)
 
     def sharpe(w):
-        return -(np.dot(w.T, media) / np.sqrt(np.dot(w.T, np.dot(cov, w))))
+        vol = riesgo(w)
+        ret = w.T @ media
+        return -((ret - rf) / vol) if vol != 0 else 0
 
     n = len(media)
     w_inicial = np.ones(n) / n
@@ -225,8 +227,12 @@ def optimizar_portafolio_markowitz(retornos, metodo="min_vol", objetivo=None):
     else:
         objetivo_funcion = riesgo
 
-    limites = [(-1, 1) for _ in range(n)]
+    limites = [(0, 1) for _ in range(n)]  # sin shorts
     resultado = minimize(objetivo_funcion, w_inicial, constraints=restricciones, bounds=limites)
+
+    if not resultado.success:
+        raise ValueError(resultado.message)
+
     return np.array(resultado.x).flatten()
 
 
@@ -234,7 +240,7 @@ def black_litterman_optimizar(retornos, P, Q, tau=0.05, metodo="sharpe"):
     # Anualización de los parámetros históricos de entrada para alinearlos con los Views anuales (Q)
     media = retornos.mean().values * 252
     cov = retornos.cov().values * 252
-    omega = np.diag([0.01] * P.shape[0])
+    omega = np.diag(np.diag(P @ (tau * cov) @ P.T))
 
     # Calcular media ajustada por Black-Litterman
     M = np.linalg.inv(
@@ -446,13 +452,10 @@ with tabs[2]:
         sesgo = skew(retornos)
         curtosis_val = kurtosis(retornos)
         sharpe = media / volatilidad if volatilidad != 0 else np.nan
-        sortino = (
-            media / retornos[retornos < 0].std()
-            if retornos[retornos < 0].std() != 0
-            else np.nan
-        )
-        VaR_95 = np.percentile(retornos, 5)
-        CVaR_95 = retornos[retornos <= VaR_95].mean()
+        downside_std = retornos[retornos < 0].std() * 100
+        sortino = media / downside_std if downside_std != 0 else np.nan
+        VaR_95 = np.percentile(retornos, 5) *100
+        CVaR_95 = retornos[retornos <= VaR_95].mean()*100
 
         drawdown, watermark = calcular_drawdown_y_watermark(precios)
 
@@ -534,8 +537,8 @@ with tabs[3]:
     st.plotly_chart(fig_sharpe)
 
     # --- Frontera eficiente como curva continua ---
-    media_ret = retornos_2010_2020.mean()
-    cov_ret = retornos_2010_2020.cov().values
+    media_ret = retornos_2010_2020.mean()*252
+    cov_ret = retornos_2010_2020.cov().values*252
     n_fe = len(media_ret)
 
     def vol_port(w): return np.sqrt(np.dot(w, np.dot(cov_ret, w)))
@@ -544,7 +547,7 @@ with tabs[3]:
     # Rango de rendimientos objetivo: desde mínima vol hasta el máximo posible
     pesos_mv = optimizar_portafolio_markowitz(retornos_2010_2020, metodo="min_vol")
     ret_min_fe = ret_port(pesos_mv)
-    ret_max_fe = float(media_ret.max()) * 0.95
+    ret_max_fe = media_ret.max()
 
     vols_fe, rets_fe = [], []
     for objetivo in np.linspace(ret_min_fe, ret_max_fe, 60):
@@ -672,11 +675,11 @@ with tabs[4]:
 
     for nombre, pesos in portafolios:
         ret_port = np.sum(retornos_backtest * pesos, axis=1)
-        media_p = ret_port.mean() * 100
-        vol_p = ret_port.std() * 100
+        media_p = ret_port.mean() * 252 * 100
+        vol_p = ret_port.std() * np.sqrt(252) * 100
+        sharpe_p = media_p / vol_p
         sesgo_p = skew(ret_port)
         curtosis_p = kurtosis(ret_port)
-        sharpe_p = media_p / vol_p if vol_p != 0 else np.nan
         sortino_p = (
             media_p / ret_port[ret_port < 0].std()
             if ret_port[ret_port < 0].std() != 0
@@ -801,12 +804,12 @@ with tabs[5]:
         serie = pd.Series(ret_serie, index=retornos_backtest.index)
         # Corrección: Interés compuesto geométrico real para portafolios BL
         rendimientos_bl[nombre] = (1 + serie).cumprod() - 1
-
-        media_p = serie.mean() * 100
-        vol_p = serie.std() * 100
+        media_p = ret_port.mean() * 252 * 100
+        vol_p = ret_port.std() * np.sqrt(252) * 100
+        sharpe_p = media_p / vol_p
         sesgo_p = skew(serie)
         curtosis_p = kurtosis(serie)
-        sharpe_p = media_p / vol_p if vol_p != 0 else np.nan
+  
         sortino_p = (
             media_p / serie[serie < 0].std()
             if serie[serie < 0].std() != 0
