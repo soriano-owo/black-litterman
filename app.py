@@ -482,21 +482,25 @@ with tabs[2]:
         st.write("### Rendimientos Acumulados")
         fig_rendimientos = graficar_linea(
             x_column=data.index,
-            y_column=(1 + retornos).cumprod(),
-            title=f"Rendimientos Acumulados - {descripcion['nombre']}",
-            labels={"x": "Fecha", "y": "Rendimientos Acumulados"},
+            y_column=((1 + retornos).cumprod() - 1)*100,
+            title=f"Rendimiento acumulado - {descripcion['nombre']}",
+            labels={"x": "Fecha", "y": "Rendimiento acumulado"},
         )
         st.plotly_chart(fig_rendimientos)
 
         st.write("### Distribución de Retornos")
+
+       retornos_pct = retornos * 100
+
         fig_dist = px.histogram(
-            retornos,
+            retornos_pct,
             nbins=50,
-            title="Distribución de Retornos",
-            labels={"value": "Retornos", "index": "Frecuencia"},
+            title="Distribución de Retornos (%)",
+            labels={"value": "Retornos diarios (%)", "index": "Frecuencia"},
         )
+
         fig_dist.add_vline(
-            x=VaR_95_decimal,
+            x=VaR_95,
             line_dash="dash",
             line_color="red",
             annotation_text="VaR 95%",
@@ -504,12 +508,12 @@ with tabs[2]:
         )
 
         fig_dist.add_vline(
-            x=CVaR_95 / 100,
+            x=CVaR_95,
             line_dash="dot",
             line_color="orange",
             annotation_text="CVaR 95%",
             annotation_position="top left"
-)
+        )
         st.plotly_chart(fig_dist)
 
         st.write("### Serie de Tiempo del Precio con Drawdowns y Watermark")
@@ -534,7 +538,10 @@ with tabs[2]:
             title=f"Drawdown (%) - {descripcion['nombre']}",
             labels={"x": "Fecha", "y": "Drawdown (%)"}
         )
+        st.plotly_chart(fig_dd)
         st.plotly_chart(fig_drawdown)
+
+
 
 # --- Portafolios Óptimos ---
 with tabs[3]:
@@ -562,12 +569,18 @@ with tabs[3]:
     st.plotly_chart(fig_sharpe)
 
     # --- Frontera eficiente como curva continua ---
-    media_ret = retornos_2010_2020.mean()*252*100
-    cov_ret = retornos_2010_2020.cov().values*252*100
+
+
+    media_ret = retornos_2010_2020.mean() * 252
+    cov_ret = retornos_2010_2020.cov().values * 252
+
+    def vol_port(w):
+        return np.sqrt(np.dot(w, np.dot(cov_ret, w)))
+
+    def ret_port(w):
+        return float(np.dot(w, media_ret))
     n_fe = len(media_ret)
 
-    def vol_port(w): return np.sqrt(np.dot(w, np.dot(cov_ret, w)))
-    def ret_port(w): return float(np.dot(w, media_ret))
 
     # Rango de rendimientos objetivo: desde mínima vol hasta el máximo posible
     pesos_mv = optimizar_portafolio_markowitz(retornos_2010_2020, metodo="min_vol")
@@ -604,15 +617,15 @@ with tabs[3]:
 
     # Curva de la frontera eficiente
     fig.add_trace(go.Scatter(
-        x=vols_fe, y=rets_fe,
+        x=np.array(vols_fe) * 100,
+        y=np.array(rets_fe) * 100,
         mode="lines",
-        line=dict(color="cyan", width=2),
         name="Frontera Eficiente",
     ))
 
     # Portafolio de Mínima Volatilidad
     fig.add_trace(go.Scatter(
-        x=[vol_min], y=[ret_min],
+        x=[vol_min*100], y=[ret_min*100],
         mode="markers",
         marker=dict(color="blue", size=14, symbol="diamond"),
         name="Mínima Volatilidad",
