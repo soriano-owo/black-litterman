@@ -391,8 +391,8 @@ with tabs[1]:
     st.subheader("Series de Tiempo de los Precios de Cierre")
     for ticker, info in tickers.items():
 	fig = px.line(x=datos_2010_hoy[ticker].index,
-              y=datos_2010_hoy[ticker]['Close'].values.flatten(),
-              title=f"Precio de Cierre - {ticker}")
+        y=datos_2010_hoy[ticker]['Close'].values.flatten(),
+        title=f"Precio de Cierre - {ticker}")
         st.plotly_chart(fig)
         
         
