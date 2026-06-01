@@ -460,9 +460,10 @@ with tabs[2]:
 
         downside_std = retornos[retornos < 0].std() * np.sqrt(252) * 100
         sortino = media / downside_std if downside_std != 0 else np.nan
-        VaR_p_decimal = np.percentile(serie, 5)
-        VaR_p = VaR_p_decimal * 100
-        CVaR_p = serie[serie <= VaR_p_decimal].mean() * 100
+
+        VaR_95_decimal = np.percentile(retornos, 5)
+        VaR_95 = VaR_95_decimal * 100
+        CVaR_95 = retornos[retornos <= VaR_95_decimal].mean() * 100
 
         drawdown, watermark = calcular_drawdown_y_watermark(precios)
 
@@ -494,8 +495,21 @@ with tabs[2]:
             title="Distribución de Retornos",
             labels={"value": "Retornos", "index": "Frecuencia"},
         )
-        fig_dist.add_vline(x=VaR_95_decimal, line_dash="dash", line_color="red", annotation_text="VaR 95%", annotation_position="top left")
-        fig_dist.add_vline(x=CVaR_95/100, line_dash="dot", line_color="orange", annotation_text="CVaR 95%", annotation_position="top left")
+        fig_dist.add_vline(
+            x=VaR_95_decimal,
+            line_dash="dash",
+            line_color="red",
+            annotation_text="VaR 95%",
+            annotation_position="top left"
+        )
+
+        fig_dist.add_vline(
+            x=CVaR_95 / 100,
+            line_dash="dot",
+            line_color="orange",
+            annotation_text="CVaR 95%",
+            annotation_position="top left"
+)
         st.plotly_chart(fig_dist)
 
         st.write("### Serie de Tiempo del Precio con Drawdowns y Watermark")
