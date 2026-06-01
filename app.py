@@ -634,11 +634,11 @@ with tabs[4]:
 
     st.subheader("Rendimientos Acumulados de los Portafolios")
     for nombre, pesos in portafolios:
-        pesos_reshaped = np.array(pesos).reshape(-1, 1)
-        rendimientos = retornos_backtest.dot(pesos_reshaped)
-        rendimientos_acumulados[nombre] = rendimientos.cumsum()
+        pesos_arr = np.array(pesos).flatten()
+        ret_serie = retornos_backtest.values.dot(pesos_arr)
+        rendimientos_acumulados[nombre] = pd.Series(ret_serie, index=retornos_backtest.index).cumsum()
 
-    sp_retornos_cumsum = sp_retornos.cumsum()
+    sp_retornos_cumsum = pd.Series(sp_retornos.values.flatten(), index=sp_retornos.index).cumsum()
 
     fig_rendimientos = px.line(
         rendimientos_acumulados,
@@ -648,7 +648,7 @@ with tabs[4]:
     fig_rendimientos.add_trace(
         go.Scatter(
             x=sp_retornos_cumsum.index,
-            y=sp_retornos_cumsum.values.flatten(),
+            y=sp_retornos_cumsum.values,
             mode="lines",
             name="S&P 500",
             line=dict(color="red", dash="solid"),
@@ -678,9 +678,11 @@ with tabs[5]:
     Q = np.array(Q_values)
 
     pesos_black_litterman = black_litterman_optimizar(retornos_2010_2020, P, Q)
+
     st.write("### Pesos del Portafolio Ajustado con Black-Litterman:")
     for ticker, peso in zip(tickers.keys(), pesos_black_litterman):
         st.write(f"{ticker}: {peso:.2%}")
+
     fig_black_litterman = px.bar(
         x=list(tickers.keys()),
         y=pesos_black_litterman,
@@ -696,3 +698,67 @@ with tabs[5]:
     para ver cómo cambian los pesos del portafolio.
     """
     )
+
+    # --- Backtesting de Black-Litterman vs otros portafolios ---
+    st.write("---")
+    st.subheader(f"Backtesting Black-Litterman vs otros portafolios ({inicio_backtest_str} - {fin_backtest_str})")
+
+    portafolios_bl = [
+        ("Mínima Volatilidad", pesos_min_vol),
+        ("Máximo Sharpe Ratio", pesos_sharpe),
+        ("Equitativo", [1 / len(tickers_seleccionados)] * len(tickers_seleccionados)),
+        ("Black-Litterman", pesos_black_litterman),
+    ]
+
+    rendimientos_bl = pd.DataFrame(index=retornos_backtest.index)
+    metricas_bl = [0, 0, 0, 0, 0, 0, 0, 0]
+
+    for nombre, pesos in portafolios_bl:
+        pesos_arr = np.array(pesos).flatten()
+        ret_serie = retornos_backtest.values.dot(pesos_arr)
+        serie = pd.Series(ret_serie, index=retornos_backtest.index)
+        rendimientos_bl[nombre] = serie.cumsum()
+
+        media_p = serie.mean() * 100
+        vol_p = serie.std() * 100
+        sesgo_p = skew(serie)
+        curtosis_p = kurtosis(serie)
+        sharpe_p = media_p / vol_p if vol_p != 0 else np.nan
+        sortino_p = (
+            media_p / serie[serie < 0].std()
+            if serie[serie < 0].std() != 0
+            else np.nan
+        )
+        VaR_p = np.percentile(serie, 5)
+        CVaR_p = serie[serie <= VaR_p].mean()
+        metricas_bl = np.column_stack((metricas_bl, [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]))
+
+    metricas_bl = metricas_bl[:, 1:]
+
+    st.write("### Métricas comparativas")
+    st.dataframe(
+        pd.DataFrame(
+            metricas_bl,
+            columns=["Mínima Volatilidad", "Máximo Sharpe Ratio", "Equitativo", "Black-Litterman"],
+            index=["Media (%)", "Volatilidad (%)", "Sesgo", "Curtosis", "Sharpe Ratio", "Sortino Ratio", "VaR 95%", "CVaR 95%"],
+        )
+    )
+
+    st.write("### Rendimientos Acumulados")
+    sp_bl_cumsum = pd.Series(sp_retornos.values.flatten(), index=sp_retornos.index).cumsum()
+
+    fig_bl = px.line(
+        rendimientos_bl,
+        title="Rendimientos Acumulados - Black-Litterman vs otros portafolios",
+        labels={"value": "Rendimientos Acumulados", "variable": "Portafolio", "index": "Fecha"},
+    )
+    fig_bl.add_trace(
+        go.Scatter(
+            x=sp_bl_cumsum.index,
+            y=sp_bl_cumsum.values,
+            mode="lines",
+            name="S&P 500",
+            line=dict(color="black", dash="dot"),
+        )
+    )
+    st.plotly_chart(fig_bl)
