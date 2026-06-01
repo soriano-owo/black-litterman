@@ -390,10 +390,9 @@ with tabs[1]:
     # Mostrar la serie de tiempo de cada ETF
     st.subheader("Series de Tiempo de los Precios de Cierre")
     for ticker, info in tickers.items():
-        fig = px.line(datos_2010_hoy[ticker],
-                      x=datos_2010_hoy[ticker].index,
-                      y=datos_2010_hoy[ticker]['Close'].values.flatten(),
-                      title=f"Precio de Cierre - {ticker}")
+	fig = px.line(x=datos_2010_hoy[ticker].index,
+              y=datos_2010_hoy[ticker]['Close'].values.flatten(),
+              title=f"Precio de Cierre - {ticker}")
         st.plotly_chart(fig)
         
         
