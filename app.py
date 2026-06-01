@@ -490,7 +490,7 @@ with tabs[2]:
 
         st.write("### Distribución de Retornos")
 
-       retornos_pct = retornos * 100
+        retornos_pct = retornos * 100
 
         fig_dist = px.histogram(
             retornos_pct,
