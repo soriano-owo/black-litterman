@@ -460,8 +460,9 @@ with tabs[2]:
 
         downside_std = retornos[retornos < 0].std() * np.sqrt(252) * 100
         sortino = media / downside_std if downside_std != 0 else np.nan
-        VaR_95 = np.percentile(retornos, 5) *100
-        CVaR_95 = retornos[retornos <= VaR_95].mean()*100
+        VaR_p_decimal = np.percentile(ret_port, 5)
+        VaR_p = VaR_p_decimal * 100
+        CVaR_p = ret_port[ret_port <= VaR_p_decimal].mean() * 100
 
         drawdown, watermark = calcular_drawdown_y_watermark(precios)
 
@@ -493,8 +494,8 @@ with tabs[2]:
             title="Distribución de Retornos",
             labels={"value": "Retornos", "index": "Frecuencia"},
         )
-        fig_dist.add_vline(x=VaR_95, line_dash="dash", line_color="red", annotation_text="VaR 95%", annotation_position="top left")
-        fig_dist.add_vline(x=CVaR_95, line_dash="dot", line_color="orange", annotation_text="CVaR 95%", annotation_position="top left")
+        fig_dist.add_vline(x=VaR_95_decimal, line_dash="dash", line_color="red", annotation_text="VaR 95%", annotation_position="top left")
+        fig_dist.add_vline(x=CVaR_95/100, line_dash="dot", line_color="orange", annotation_text="CVaR 95%", annotation_position="top left")
         st.plotly_chart(fig_dist)
 
         st.write("### Serie de Tiempo del Precio con Drawdowns y Watermark")
@@ -505,7 +506,6 @@ with tabs[2]:
         if len(precios_uni) != len(drawdown_uni):
             drawdown_uni = np.resize(drawdown_uni, precios_uni.shape)
 
-        drawdown_curve = precios_uni + (drawdown_uni * precios_uni)
 
         fig_drawdown = px.line(
             x=data.index,
@@ -514,7 +514,12 @@ with tabs[2]:
             labels={"x": "Fecha", "y": "Precio del ETF"},
         )
         fig_drawdown.add_scatter(x=data.index, y=watermark_uni, mode="lines", name="Watermark", line=dict(color="blue", dash="dash"))
-        fig_drawdown.add_scatter(x=data.index, y=drawdown_curve, mode="lines", name="Drawdown", line=dict(color="red", dash="dot"))
+        fig_dd = px.line(
+            x=data.index,
+            y=drawdown * 100,
+            title=f"Drawdown (%) - {descripcion['nombre']}",
+            labels={"x": "Fecha", "y": "Drawdown (%)"}
+        )
         st.plotly_chart(fig_drawdown)
 
 # --- Portafolios Óptimos ---
@@ -543,8 +548,8 @@ with tabs[3]:
     st.plotly_chart(fig_sharpe)
 
     # --- Frontera eficiente como curva continua ---
-    media_ret = retornos_2010_2020.mean()*252
-    cov_ret = retornos_2010_2020.cov().values*252
+    media_ret = retornos_2010_2020.mean()*252*100
+    cov_ret = retornos_2010_2020.cov().values*252*100
     n_fe = len(media_ret)
 
     def vol_port(w): return np.sqrt(np.dot(w, np.dot(cov_ret, w)))
@@ -688,8 +693,11 @@ with tabs[4]:
         curtosis_p = kurtosis(ret_port)
         downside_std = ret_port[ret_port < 0].std() * np.sqrt(252) * 100
         sortino_p = media_p / downside_std if downside_std != 0 else np.nan
-        VaR_p = np.percentile(ret_port, 5)
-        CVaR_p = ret_port[ret_port <= VaR_p].mean()
+        VaR_p_decimal = np.percentile(ret_port, 5)
+        CVaR_p_decimal = ret_port[ret_port <= VaR_p_decimal].mean()
+
+        VaR_p = VaR_p_decimal * 100
+        CVaR_p = CVaR_p_decimal * 100
         metricas = [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]
         metricas_final = np.column_stack((metricas_final, metricas))
 
@@ -808,16 +816,24 @@ with tabs[5]:
         serie = pd.Series(ret_serie, index=retornos_backtest.index)
         # Corrección: Interés compuesto geométrico real para portafolios BL
         rendimientos_bl[nombre] = (1 + serie).cumprod() - 1
-        media_p = ret_port.mean() * 252 * 100
-        vol_p = ret_port.std() * np.sqrt(252) * 100
-        sharpe_p = media_p / vol_p
+
         sesgo_p = skew(serie)
         curtosis_p = kurtosis(serie)
-        downside_std = ret_port[ret_port < 0].std() * np.sqrt(252) * 100
+
+        media_p = serie.mean() * 252 * 100
+        vol_p = serie.std() * np.sqrt(252) * 100
+        sharpe_p = media_p / vol_p if vol_p != 0 else np.nan
+
+        downside_std = serie[serie < 0].std() * np.sqrt(252) * 100
         sortino_p = media_p / downside_std if downside_std != 0 else np.nan
-        VaR_p_decimal = np.percentile(ret_port, 5)
+
+        VaR_p_decimal = np.percentile(serie, 5)
         VaR_p = VaR_p_decimal * 100
-        CVaR_p = ret_port[ret_port <= VaR_p_decimal].mean() * 100
+        CVaR_p = serie[serie <= VaR_p_decimal].mean() * 100
+        CVaR_p_decimal = ret_port[ret_port <= VaR_p_decimal].mean()
+
+        VaR_p = VaR_p_decimal * 100
+
         metricas_bl = np.column_stack((metricas_bl, [media_p, vol_p, sesgo_p, curtosis_p, sharpe_p, sortino_p, VaR_p, CVaR_p]))
 
     metricas_bl = metricas_bl[:, 1:]
