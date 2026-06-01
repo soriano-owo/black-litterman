@@ -460,9 +460,9 @@ with tabs[2]:
 
         downside_std = retornos[retornos < 0].std() * np.sqrt(252) * 100
         sortino = media / downside_std if downside_std != 0 else np.nan
-        VaR_p_decimal = np.percentile(ret_port, 5)
+        VaR_p_decimal = np.percentile(serie, 5)
         VaR_p = VaR_p_decimal * 100
-        CVaR_p = ret_port[ret_port <= VaR_p_decimal].mean() * 100
+        CVaR_p = serie[serie <= VaR_p_decimal].mean() * 100
 
         drawdown, watermark = calcular_drawdown_y_watermark(precios)
 
