@@ -513,23 +513,73 @@ with tabs[3]:
     fig_sharpe = px.bar(x=list(tickers.keys()), y=pesos_sharpe, title="Pesos - Máximo Sharpe Ratio")
     st.plotly_chart(fig_sharpe)
 
-    frontera = calcular_frontera_eficiente(retornos_2010_2020)
-    fig = px.scatter(
-        frontera,
-        x="port_vols",
-        y="port_rets",
-        color="sharpe_ratio",
-        labels={"port_vols": "Volatilidad Esperada", "port_rets": "Rendimiento Esperado", "sharpe_ratio": "Sharpe Ratio"},
-        title="Frontera Eficiente Simulada",
-    ).update_traces(mode="markers", marker=dict(symbol="cross"))
+    # Frontera eficiente con 2000 portafolios simulados
+    frontera = calcular_frontera_eficiente(retornos_2010_2020, num_puntos=2000)
 
-    max_sharpe_idx = frontera["sharpe_ratio"].idxmax()
-    fig.add_scatter(
+    # Ordenar por volatilidad para trazar la curva
+    frontera_sorted = frontera.sort_values("port_vols")
+
+    fig = go.Figure()
+
+    # Nube de portafolios simulados coloreados por Sharpe
+    fig.add_trace(go.Scatter(
+        x=frontera_sorted["port_vols"],
+        y=frontera_sorted["port_rets"],
         mode="markers",
-        x=[frontera.loc[max_sharpe_idx, "port_vols"]],
-        y=[frontera.loc[max_sharpe_idx, "port_rets"]],
-        marker=dict(color="RoyalBlue", size=15, symbol="star"),
-        name="Máximo Sharpe",
+        marker=dict(
+            color=frontera_sorted["sharpe_ratio"],
+            colorscale="Viridis",
+            size=4,
+            opacity=0.5,
+            colorbar=dict(title="Sharpe Ratio"),
+        ),
+        name="Portafolios simulados",
+    ))
+
+    # Calcular volatilidad y rendimiento de cada portafolio óptimo
+    media_ret = retornos_2010_2020.mean()
+    cov_ret = retornos_2010_2020.cov()
+
+    def vol_port(w): return np.sqrt(np.dot(w, np.dot(cov_ret, w)))
+    def ret_port(w): return np.dot(w, media_ret)
+
+    vol_min = vol_port(pesos_min_vol)
+    ret_min = ret_port(pesos_min_vol)
+    vol_sharpe = vol_port(pesos_sharpe)
+    ret_sharpe = ret_port(pesos_sharpe)
+    peso_eq = np.array([1 / len(tickers_seleccionados)] * len(tickers_seleccionados))
+    vol_eq = vol_port(peso_eq)
+    ret_eq = ret_port(peso_eq)
+
+    # Portafolio de Mínima Volatilidad
+    fig.add_trace(go.Scatter(
+        x=[vol_min], y=[ret_min],
+        mode="markers",
+        marker=dict(color="blue", size=14, symbol="diamond"),
+        name="Mínima Volatilidad",
+    ))
+
+    # Portafolio de Máximo Sharpe
+    fig.add_trace(go.Scatter(
+        x=[vol_sharpe], y=[ret_sharpe],
+        mode="markers",
+        marker=dict(color="red", size=14, symbol="star"),
+        name="Máximo Sharpe Ratio",
+    ))
+
+    # Portafolio Equitativo
+    fig.add_trace(go.Scatter(
+        x=[vol_eq], y=[ret_eq],
+        mode="markers",
+        marker=dict(color="orange", size=14, symbol="square"),
+        name="Equitativo",
+    ))
+
+    fig.update_layout(
+        title="Frontera Eficiente Simulada",
+        xaxis_title="Volatilidad",
+        yaxis_title="Rendimiento Esperado",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig)
 
