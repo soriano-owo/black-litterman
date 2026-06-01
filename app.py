@@ -152,7 +152,7 @@ def calcular_metricas(df, nivel_VaR=[0.95, 0.975, 0.99]):
     sharpe = np.mean(retornos) / np.std(retornos) if np.std(retornos) != 0 else np.nan
 
     # Beta
-    sp500 = yf.download("^GSPC", start=df.index[0], end=df.index[-1])['Adj Close']
+    sp500 = yf.download("^GSPC", start=df.index[0], end=df.index[-1])['Close']
     sp500_retornos = sp500.pct_change().dropna()
     retornos_alineados = retornos.reindex(sp500_retornos.index).dropna()
     sp500_retornos_alineados = sp500_retornos.reindex(retornos_alineados.index).dropna()
@@ -604,7 +604,7 @@ with tabs[4]:
 
 
     # Datos del S&P 500
-    sp500 = yf.download("^GSPC", start="2021-01-01", end="2023-01-01")['Adj Close']
+    sp500 = yf.download("^GSPC", start="2021-01-01", end="2023-01-01")['Close']
     sp_retornos = sp500.pct_change().dropna()
 
     sp_media_retornos = retornos.mean() * 100
