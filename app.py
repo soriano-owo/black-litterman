@@ -72,7 +72,7 @@ tickers = {
         "rendimiento_ytd": "15%",
         "duracion": "Baja"
     },
-    "VWO": {
+    "V0O": {
         "nombre": "Vanguard FTSE Emerging Markets ETF",
         "descripcion": "Este ETF sigue el índice FTSE Emerging Markets All Cap China A Inclusion Index, que incluye acciones de mercados emergentes en Asia, Europa, América Latina y África.",
         "sector": "Renta variable",
