@@ -455,14 +455,13 @@ with tabs[4]:
     st.write(
         """
     En esta sección se pusieron a prueba las optimizaciones obtenidas. Para ello se empleó la técnica de backtesting,
-    en la cual las estrategias fueron implementadas para el periodo de 2021 a 2023. Los resultados se encuentran condensados
+    en la cual las estrategias fueron implementadas para el periodo de 2021 a 2025. Los resultados se encuentran condensados
     en las siguientes gráficas y tablas.
     """
     )
 
     datos_2021_2025 = cargar_datos(list(tickers.keys()), "2021-01-01", "2025-01-01")
-    
-retornos_2021_2025 = pd.DataFrame(
+    retornos_2021_2025 = pd.DataFrame(
         {k: v["Retornos"] for k, v in datos_2021_2025.items()}
     ).dropna()
 
